@@ -8,6 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local old = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("NhatKhanh_StealEgg")
@@ -42,7 +43,7 @@ end
 
 local function addSelectedToInventory(kind, category, scale)
  if not SaveData or type(SaveData.Amend) ~= "function" or not Directory[category] then
-  return false, "KhÃ´ng táº£i ÄÆ°á»£c Save/Assets cá»§a game."
+  return false, "Could not load game Save/Assets."
  end
 
  local uid = makeInventoryId(kind)
@@ -79,12 +80,13 @@ local function addSelectedToInventory(kind, category, scale)
  end)
 
  if not ok then
-  return false, "Game khÃ´ng cháº¥p nháº­n cáº­p nháº­t Save cá»¥c bá»."
+  return false, "The game rejected the local Save update."
  end
  return true, uid
 end
 
 local ALLOWED_RARITIES = { Eternal = true, Divine = true }
+local selectedRarity = "Divine"
 
 local function getRarity(data)
  local rarity = type(data) == "table" and data.Rarity
@@ -115,6 +117,7 @@ local function refreshNames(kind)
  if type(category) == "string"
  and type(data) == "table"
  and ALLOWED_RARITIES[getRarity(data)]
+ and getRarity(data) == selectedRarity
  and folder:FindFirstChild(category)
  and (kind ~= "Egg" or data.Egg ~= nil) then
  table.insert(names, category)
@@ -154,8 +157,8 @@ local C = {
 
 local frame = Instance.new("Frame")
 frame.Name = "Main"
-frame.Size = UDim2.fromOffset(320, 470)
-frame.Position = UDim2.new(0.5, -160, 0.5, -235)
+frame.Size = UDim2.fromOffset(320, 530)
+frame.Position = UDim2.new(0.5, -160, 0.5, -265)
 frame.BackgroundColor3 = C.lacquer
 frame.BorderSizePixel = 0
 frame.Parent = gui
@@ -292,36 +295,59 @@ close.MouseButton1Click:Connect(function()
  mini.Visible = true
 end)
 
-label("DANH Má»¤C", UDim2.fromOffset(14, 43), UDim2.fromOffset(100, 20), 12, C.muted)
+label("RARITY", UDim2.fromOffset(14, 43), UDim2.fromOffset(100, 20), 12, C.muted)
 
+local divineCategory = Instance.new("TextButton")
+divineCategory.Position = UDim2.fromOffset(14, 65)
+divineCategory.Size = UDim2.fromOffset(140, 30)
+divineCategory.BackgroundColor3 = C.jade
+divineCategory.TextColor3 = C.ivory
+divineCategory.Font = Enum.Font.GothamBold
+divineCategory.TextSize = 12
+divineCategory.Text = "DIVINE"
+divineCategory.Parent = frame
+Instance.new("UICorner", divineCategory).CornerRadius = UDim.new(0, 6)
+
+local eternalCategory = Instance.new("TextButton")
+eternalCategory.Position = UDim2.fromOffset(164, 65)
+eternalCategory.Size = UDim2.fromOffset(140, 30)
+eternalCategory.BackgroundColor3 = C.inset
+eternalCategory.TextColor3 = C.ivory
+eternalCategory.Font = Enum.Font.GothamBold
+eternalCategory.TextSize = 12
+eternalCategory.Text = "ETERNAL"
+eternalCategory.Parent = frame
+Instance.new("UICorner", eternalCategory).CornerRadius = UDim.new(0, 6)
+
+label("TYPE", UDim2.fromOffset(14, 99), UDim2.fromOffset(100, 20), 11, C.muted)
 local eggCategory = Instance.new("TextButton")
-eggCategory.Position = UDim2.fromOffset(14, 65)
-eggCategory.Size = UDim2.fromOffset(140, 30)
+eggCategory.Position = UDim2.fromOffset(14, 120)
+eggCategory.Size = UDim2.fromOffset(140, 28)
 eggCategory.BackgroundColor3 = C.jade
 eggCategory.TextColor3 = C.ivory
 eggCategory.Font = Enum.Font.GothamBold
-eggCategory.TextSize = 12
+eggCategory.TextSize = 11
 eggCategory.Text = "EGG"
 eggCategory.Parent = frame
 Instance.new("UICorner", eggCategory).CornerRadius = UDim.new(0, 6)
 
 local petCategory = Instance.new("TextButton")
-petCategory.Position = UDim2.fromOffset(164, 65)
-petCategory.Size = UDim2.fromOffset(140, 30)
+petCategory.Position = UDim2.fromOffset(164, 120)
+petCategory.Size = UDim2.fromOffset(140, 28)
 petCategory.BackgroundColor3 = C.inset
 petCategory.TextColor3 = C.ivory
 petCategory.Font = Enum.Font.GothamBold
-petCategory.TextSize = 12
+petCategory.TextSize = 11
 petCategory.Text = "PET"
 petCategory.Parent = frame
 Instance.new("UICorner", petCategory).CornerRadius = UDim.new(0, 6)
 
-label("CHá»N TÃN (Eternal / Divine)", UDim2.fromOffset(14, 101), UDim2.new(1, -28, 0, 20), 11, C.muted)
+label("SELECT NAME", UDim2.fromOffset(14, 151), UDim2.new(1, -28, 0, 18), 11, C.muted)
 
 local nameList = Instance.new("ScrollingFrame")
 nameList.Name = "NameList"
-nameList.Position = UDim2.fromOffset(14, 123)
-nameList.Size = UDim2.new(1, -28, 0, 132)
+nameList.Position = UDim2.fromOffset(14, 171)
+nameList.Size = UDim2.new(1, -28, 0, 104)
 nameList.BackgroundColor3 = C.inset
 nameList.BorderSizePixel = 0
 nameList.ScrollBarThickness = 5
@@ -344,9 +370,9 @@ nameListPadding.PaddingLeft = UDim.new(0, 4)
 nameListPadding.PaddingRight = UDim.new(0, 4)
 nameListPadding.Parent = nameList
 
-label("Scale: 1xâ30x (20x = 5 láº§n, 30x = 7.5 láº§n)", UDim2.fromOffset(14, 260), UDim2.new(1, -28, 0, 20), 10, C.muted)
+label("Scale: 1x-30x (20x=5x size, 30x=7.5x size)", UDim2.fromOffset(14, 278), UDim2.new(1, -28, 0, 20), 10, C.muted)
 local scaleBox = Instance.new("TextBox")
-scaleBox.Position = UDim2.fromOffset(14, 282)
+scaleBox.Position = UDim2.fromOffset(14, 300)
 scaleBox.Size = UDim2.fromOffset(140, 30)
 scaleBox.BackgroundColor3 = C.inset
 scaleBox.TextColor3 = C.ivory
@@ -358,45 +384,57 @@ scaleBox.Parent = frame
 Instance.new("UICorner", scaleBox).CornerRadius = UDim.new(0, 6)
 
 local spawn = Instance.new("TextButton")
-spawn.Position = UDim2.fromOffset(164, 282)
+spawn.Position = UDim2.fromOffset(164, 300)
 spawn.Size = UDim2.fromOffset(140, 30)
 spawn.BackgroundColor3 = C.jade
 spawn.TextColor3 = Color3.new(1,1,1)
-spawn.Text = "HIá»N THá»"
+spawn.Text = "SHOW MODEL"
 spawn.Font = Enum.Font.GothamBold
 spawn.TextSize = 12
 spawn.Parent = frame
 Instance.new("UICorner", spawn).CornerRadius = UDim.new(0, 6)
 
+local holdButton = Instance.new("TextButton")
+holdButton.Position = UDim2.fromOffset(14, 338)
+holdButton.Size = UDim2.fromOffset(290, 30)
+holdButton.BackgroundColor3 = C.jade
+holdButton.TextColor3 = Color3.new(1,1,1)
+holdButton.Text = "HOLD / RELEASE LAST MODEL"
+holdButton.Font = Enum.Font.GothamBold
+holdButton.TextSize = 11
+holdButton.Parent = frame
+Instance.new("UICorner", holdButton).CornerRadius = UDim.new(0, 6)
+
 local addToBag = Instance.new("TextButton")
-addToBag.Position = UDim2.fromOffset(14, 320)
+addToBag.Position = UDim2.fromOffset(14, 376)
 addToBag.Size = UDim2.fromOffset(290, 30)
 addToBag.BackgroundColor3 = C.gold
 addToBag.TextColor3 = C.lacquer
-addToBag.Text = "THÃM VÃO TÃI Äá» (Cá»¤C Bá»)"
+addToBag.Text = "ADD TO LOCAL BAG"
 addToBag.Font = Enum.Font.GothamBold
 addToBag.TextSize = 11
 addToBag.Parent = frame
 Instance.new("UICorner", addToBag).CornerRadius = UDim.new(0, 6)
 
 local clear = Instance.new("TextButton")
-clear.Position = UDim2.fromOffset(14, 358)
+clear.Position = UDim2.fromOffset(14, 414)
 clear.Size = UDim2.fromOffset(290, 30)
 clear.BackgroundColor3 = C.vermilion
 clear.TextColor3 = Color3.new(1,1,1)
-clear.Text = "XÃA HIá»N THá» TÃI"
+clear.Text = "CLEAR DISPLAYED MODELS"
 clear.Font = Enum.Font.GothamBold
 clear.TextSize = 12
 clear.Parent = frame
 Instance.new("UICorner", clear).CornerRadius = UDim.new(0, 6)
 
-local status = label("Sáºµn sÃ ng.", UDim2.fromOffset(14, 397), UDim2.new(1, -28, 0, 55), 10, C.muted)
+local status = label("Ready.", UDim2.fromOffset(14, 452), UDim2.new(1, -28, 0, 60), 10, C.muted)
 status.TextWrapped = true
 status.TextYAlignment = Enum.TextYAlignment.Top
 
 local kind = "Egg"
 local selectedIndex = { Egg = 1, Pet = 1 }
 local selectedName = { Egg = nil, Pet = nil }
+local updateNameList
 local function clearNameButtons()
     for _, child in ipairs(nameList:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
@@ -406,16 +444,30 @@ end
 local function updateCategoryColors()
     eggCategory.BackgroundColor3 = kind == "Egg" and C.jade or C.inset
     petCategory.BackgroundColor3 = kind == "Pet" and C.jade or C.inset
+    divineCategory.BackgroundColor3 = selectedRarity == "Divine" and C.jade or C.inset
+    eternalCategory.BackgroundColor3 = selectedRarity == "Eternal" and C.jade or C.inset
 end
 
-local function updateNameList()
+divineCategory.MouseButton1Click:Connect(function()
+    selectedRarity = "Divine"
+    updateCategoryColors()
+    updateNameList()
+end)
+
+eternalCategory.MouseButton1Click:Connect(function()
+    selectedRarity = "Eternal"
+    updateCategoryColors()
+    updateNameList()
+end)
+
+updateNameList = function()
     clearNameButtons()
     local names = refreshNames(kind)
     if #names == 0 then
         local empty = Instance.new("TextLabel")
         empty.BackgroundTransparency = 1
         empty.Size = UDim2.new(1, -8, 0, 28)
-        empty.Text = "KhÃ´ng cÃ³ model Eternal/Divine"
+        empty.Text = "No Eternal/Divine models found"
         empty.TextColor3 = C.ivory
         empty.Font = Enum.Font.Gotham
         empty.TextSize = 11
@@ -474,16 +526,16 @@ addToBag.MouseButton1Click:Connect(function()
     local name = selectedName[kind]
     local scale = tonumber(scaleBox.Text)
     if not name then
-        status.Text = "Chá»n má»t Egg/Pet trÆ°á»c."
+        status.Text = "Select an Egg/Pet first."
         return
     end
     if not scale or scale < 1 or scale > 30 then
-        status.Text = "Scale pháº£i náº±m trong khoáº£ng 1xâ30x."
+        status.Text = "Scale must be between 1x and 30x."
         return
     end
     local ok, result = addSelectedToInventory(kind, name, scale)
     if ok then
-        status.Text = "ÄÃ£ thá»­ thÃªm " .. name .. " vÃ o dá»¯ liá»u cá»¥c bá». MÃ¡y chá»§ cÃ³ thá» khÃ´ng lÆ°u váº­t pháº©m nÃ y."
+        status.Text = "Added a local-only inventory preview for " .. name .. ". The server may not save it."
     else
         status.Text = tostring(result)
     end
@@ -501,46 +553,100 @@ local function anchorModel(model)
 end
 
 local displayedSpecs = {}
+local modelStates = {}
+local heldModel = nil
+local heldOffset = CFrame.new(0.9, -0.45, -0.7) * CFrame.Angles(0, math.rad(90), math.rad(12))
+
+-- Client-only motion: pets gently bob and turn; held models follow the player's hand.
+RunService.RenderStepped:Connect(function(dt)
+    local now = os.clock()
+    local character = LocalPlayer.Character
+    local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm") or character:FindFirstChild("RightLowerArm"))
+    for model, state in pairs(modelStates) do
+        if not model or not model.Parent then
+            modelStates[model] = nil
+        elseif model == heldModel and hand then
+            local target = hand.CFrame * heldOffset
+            pcall(function() model:PivotTo(target) end)
+        elseif state.kind == "Pet" then
+            local bob = math.sin(now * 2.6 + state.phase) * 0.28
+            local yaw = now * 0.55 + state.phase
+            pcall(function()
+                model:PivotTo(state.baseCFrame * CFrame.new(0, bob, 0) * CFrame.Angles(0, yaw, 0))
+            end)
+        end
+    end
+end)
 
 local function addSparkles(model)
-    local part = model.PrimaryPart
-    if not part then
-        part = model:FindFirstChildWhichIsA("BasePart", true)
+    -- Bright local glow plus multiple emitters so the effect surrounds the whole model.
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "NhatKhanhGlow"
+    highlight.Adornee = model
+    highlight.FillColor = Color3.fromRGB(255, 224, 126)
+    highlight.OutlineColor = Color3.fromRGB(255, 248, 207)
+    highlight.FillTransparency = 0.78
+    highlight.OutlineTransparency = 0.12
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = model
+
+    local parts = {}
+    for _, obj in ipairs(model:GetDescendants()) do
+        if obj:IsA("BasePart") then table.insert(parts, obj) end
     end
-    if not part then return end
-    local emitter = Instance.new("ParticleEmitter")
-    emitter.Name = "NhatKhanhSparkles"
-    emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-    emitter.Rate = 14
-    emitter.Lifetime = NumberRange.new(0.7, 1.4)
-    emitter.Speed = NumberRange.new(0.2, 1.0)
-    emitter.SpreadAngle = Vector2.new(180, 180)
-    emitter.LightEmission = 1
-    emitter.Rotation = NumberRange.new(0, 360)
-    emitter.RotSpeed = NumberRange.new(-90, 90)
-    emitter.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.25),
-        NumberSequenceKeypoint.new(0.5, 0.45),
-        NumberSequenceKeypoint.new(1, 0)
-    })
-    emitter.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.1),
-        NumberSequenceKeypoint.new(1, 1)
-    })
-    emitter.Parent = part
+    if #parts == 0 then return end
+
+    local rootPart = model.PrimaryPart or parts[1]
+    local light = Instance.new("PointLight")
+    light.Name = "NhatKhanhEggGlow"
+    light.Color = Color3.fromRGB(255, 226, 145)
+    light.Brightness = 1.8
+    light.Range = 18
+    light.Shadows = false
+    light.Parent = rootPart
+
+    for index, part in ipairs(parts) do
+        if index <= 8 then
+            local emitter = Instance.new("ParticleEmitter")
+            emitter.Name = "NhatKhanhSparkles"
+            emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+            emitter.Rate = 9
+            emitter.Lifetime = NumberRange.new(0.65, 1.5)
+            emitter.Speed = NumberRange.new(0.15, 0.8)
+            emitter.SpreadAngle = Vector2.new(180, 180)
+            emitter.LightEmission = 1
+            emitter.Rotation = NumberRange.new(0, 360)
+            emitter.RotSpeed = NumberRange.new(-110, 110)
+            emitter.Color = ColorSequence.new(
+                Color3.fromRGB(255, 244, 183),
+                Color3.fromRGB(255, 255, 255)
+            )
+            emitter.Size = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.18),
+                NumberSequenceKeypoint.new(0.4, 0.42),
+                NumberSequenceKeypoint.new(1, 0)
+            })
+            emitter.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.05),
+                NumberSequenceKeypoint.new(0.75, 0.18),
+                NumberSequenceKeypoint.new(1, 1)
+            })
+            emitter.Parent = part
+        end
+    end
 end
 
 local function showModel(kindToShow, name, scale, remember)
     local sourceModel = getModel(kindToShow, name)
     if not sourceModel or not sourceModel:IsA("Model") then
-        return false, "KhÃ´ng tÃ¬m tháº¥y model: " .. tostring(name)
+        return false, "Model not found: " .. tostring(name)
     end
     local character = LocalPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then return false, "KhÃ´ng tÃ¬m tháº¥y nhÃ¢n váº­t." end
+    if not root then return false, "Character not found." end
 
     local ok, model = pcall(function() return sourceModel:Clone() end)
-    if not ok or not model then return false, "KhÃ´ng thá» clone model nÃ y." end
+    if not ok or not model then return false, "Could not clone this model." end
 
     anchorModel(model)
     model.Name = "_" .. name .. "_" .. tostring(#visualFolder:GetChildren() + 1)
@@ -550,16 +656,18 @@ local function showModel(kindToShow, name, scale, remember)
     local scaleFactor = math.max(1, scale / 4)
     local okPosition = pcall(function()
         model:ScaleTo(scaleFactor)
+        -- Place in front of the player using a downward ray that accepts only floor-like surfaces.
+        -- This avoids wall/base decorations moving the model to a bad height.
         local targetPosition = (root.CFrame * CFrame.new(0, 0, -7)).Position
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         rayParams.FilterDescendantsInstances = {character, model, visualFolder}
-        local hit = Workspace:Raycast(
-            targetPosition + Vector3.new(0, 150, 0),
-            Vector3.new(0, -500, 0),
-            rayParams
-        )
-        local groundY = hit and hit.Position.Y or (root.Position.Y - root.Size.Y * 0.5)
+        local rayOrigin = Vector3.new(targetPosition.X, root.Position.Y + 80, targetPosition.Z)
+        local hit = Workspace:Raycast(rayOrigin, Vector3.new(0, -250, 0), rayParams)
+        local groundY = root.Position.Y - 3
+        if hit and hit.Normal.Y > 0.5 then
+            groundY = hit.Position.Y
+        end
         local pivotBefore = model:GetPivot()
         local boxCF, boxSize = model:GetBoundingBox()
         local pivotToBox = pivotBefore:ToObjectSpace(boxCF)
@@ -573,10 +681,15 @@ local function showModel(kindToShow, name, scale, remember)
 
     if not okPosition then
         model:Destroy()
-        return false, "KhÃ´ng thá» scale hoáº·c Äáº·t mÃ´ hÃ¬nh."
+        return false, "Could not scale or position the model."
     end
 
     addSparkles(model)
+    modelStates[model] = {
+        kind = kindToShow,
+        phase = math.random() * math.pi * 2,
+        baseCFrame = model:GetPivot()
+    }
     if remember then
         table.insert(displayedSpecs, {
             kind = kindToShow,
@@ -591,27 +704,59 @@ spawn.MouseButton1Click:Connect(function()
     local name = selectedName[kind]
     local scale = tonumber(scaleBox.Text)
     if not name then
-        status.Text = "HÃ£y chá»n tÃªn trong danh sÃ¡ch cuá»n trÆ°á»c."
+        status.Text = "Select a name from the list first."
         return
     end
     if not scale or scale < 1 or scale > 30 then
-        status.Text = "Scale pháº£i náº±m trong khoáº£ng 1xâ30x."
+        status.Text = "Scale must be between 1x and 30x."
         return
     end
     local ok, err = showModel(kind, name, scale, true)
     if ok then
-        status.Text = "ÄÃ£ hiá»n thá» " .. name .. " | scale " .. scale .. "x | cÃ³ hiá»u á»©ng láº¥p lÃ¡nh."
+        status.Text = "Displayed " .. name .. " | scale " .. scale .. "x | sparkle effect enabled."
     else
         status.Text = tostring(err)
     end
 end)
 
+holdButton.MouseButton1Click:Connect(function()
+    if heldModel and heldModel.Parent then
+        modelStates[heldModel] = nil
+        heldModel = nil
+        holdButton.Text = "HOLD / RELEASE LAST MODEL"
+        status.Text = "Released model; local display remains in front of you."
+        return
+    end
+    local children = visualFolder:GetChildren()
+    local lastModel = nil
+    for i = #children, 1, -1 do
+        if children[i]:IsA("Model") then
+            lastModel = children[i]
+            break
+        end
+    end
+    if not lastModel then
+        status.Text = "Show an Egg/Pet model first."
+        return
+    end
+    heldModel = lastModel
+    modelStates[heldModel] = modelStates[heldModel] or {
+        kind = kind, phase = math.random() * math.pi * 2,
+        baseCFrame = heldModel:GetPivot()
+    }
+    holdButton.Text = "RELEASE HELD MODEL"
+    status.Text = "Holding last model locally. This is visual only."
+end)
+
 clear.MouseButton1Click:Connect(function()
+    heldModel = nil
+    holdButton.Text = "HOLD / RELEASE LAST MODEL"
     for _, obj in ipairs(visualFolder:GetChildren()) do
+        modelStates[obj] = nil
         obj:Destroy()
     end
     table.clear(displayedSpecs)
-    status.Text = "ÄÃ£ xÃ³a toÃ n bá» Egg/Pet Äang hiá»n thá»."
+    status.Text = "Cleared all displayed Egg/Pet models."
 end)
 
 -- Recreate local display models after character respawn/round reset in the same session.
@@ -623,7 +768,10 @@ LocalPlayer.CharacterAdded:Connect(function()
         visualFolder.Parent = Workspace
     end
     local saved = table.clone(displayedSpecs)
+    heldModel = nil
+    holdButton.Text = "HOLD / RELEASE LAST MODEL"
     for _, existing in ipairs(visualFolder:GetChildren()) do
+        modelStates[existing] = nil
         existing:Destroy()
     end
     for _, spec in ipairs(saved) do
