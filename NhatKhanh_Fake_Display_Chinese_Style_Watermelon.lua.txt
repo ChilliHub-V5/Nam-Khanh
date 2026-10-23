@@ -1,0 +1,474 @@
+-- Nhat Khanh | Steal An Egg - Fake Visual Display Only
+-- This script clones local models into Workspace for display only.
+-- It does NOT edit Save data, inventory, equipped assets, cash, or server state.
+-- Scale input is restricted to 1x-30x per the requested game limit.
+-- Weight and earnings use the game's own utility functions when available.
+-- Names are dynamically filtered from Data.Assets.Directory to Eternal/Divine only.
+-- Visual model size uses the source GUI mapping, not gameplay Scale directly.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+local old = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("NhatKhanh_FakeStealEgg")
+if old then old:Destroy() end
+
+local visualFolder = Workspace:FindFirstChild("__NhatKhanhFakeStealEgg")
+if visualFolder then visualFolder:Destroy() end
+visualFolder = Instance.new("Folder")
+visualFolder.Name = "__NhatKhanhFakeStealEgg"
+visualFolder.Parent = Workspace
+
+local function safeRequire(path)
+    local ok, result = pcall(require, path)
+    if ok then return result end
+    return nil
+end
+
+local AssetsData = safeRequire(ReplicatedStorage:WaitForChild("Data"):WaitForChild("Assets"))
+local Directory = AssetsData and (AssetsData.Directory or AssetsData) or {}
+
+local ALLOWED_RARITIES = { Eternal = true, Divine = true }
+
+local function getRarity(data)
+    local rarity = type(data) == "table" and data.Rarity
+    if type(rarity) ~= "table" then return nil end
+    return rarity.DisplayName or rarity._id
+end
+
+local function getModelFolder(kind)
+    if kind == "Egg" then
+        local assets = ReplicatedStorage:FindFirstChild("Assets")
+        local models = assets and assets:FindFirstChild("Models")
+        return models and models:FindFirstChild("Eggs")
+    end
+    return ReplicatedStorage:FindFirstChild("AssetModels")
+end
+
+local function refreshNames(kind)
+    local names = {}
+    local folder = getModelFolder(kind)
+    if not folder then return names end
+
+    for category, data in pairs(Directory) do
+        if type(category) == "string"
+            and type(data) == "table"
+            and ALLOWED_RARITIES[getRarity(data)]
+            and folder:FindFirstChild(category)
+            and (kind ~= "Egg" or data.Egg ~= nil) then
+            table.insert(names, category)
+        end
+    end
+
+    table.sort(names)
+    return names
+end
+local EggRecords = safeRequire(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("EggRecords"))
+local AssetEarnings = safeRequire(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("AssetEarnings"))
+
+local function formatNumber(n)
+    n = tonumber(n) or 0
+    local a = math.abs(n)
+    if a >= 1e12 then return string.format("%.2fT", n / 1e12) end
+    if a >= 1e9 then return string.format("%.2fB", n / 1e9) end
+    if a >= 1e6 then return string.format("%.2fM", n / 1e6) end
+    if a >= 1e3 then return string.format("%.2fK", n / 1e3) end
+    return string.format("%.2f", n)
+end
+
+local function getModel(kind, name)
+    local folder = getModelFolder(kind)
+    return folder and folder:FindFirstChild(name)
+end
+
+local function calculate(kind, name, scale)
+    local kg, money = nil, nil
+    if EggRecords and type(EggRecords.WeightKgForScale) == "function" then
+        local ok, result = pcall(EggRecords.WeightKgForScale, name, scale)
+        if ok and type(result) == "number" then kg = result end
+    end
+    if AssetEarnings and type(AssetEarnings.MutationOnlyRatePerSecond) == "function" then
+        local ok, result = pcall(AssetEarnings.MutationOnlyRatePerSecond, {
+            Category = name,
+            Scale = scale,
+            Mutations = {},
+            BaseMutation = nil
+        })
+        if ok and type(result) == "number" then money = result end
+    end
+    return kg, money
+end
+
+local UserInputService = game:GetService("UserInputService")
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "NhatKhanh_FakeStealEgg"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Chinese period-drama inspired palette: dark lacquer, jade, vermilion and antique gold.
+local C = {
+    lacquer = Color3.fromRGB(35, 25, 24),
+    panel = Color3.fromRGB(48, 33, 29),
+    inset = Color3.fromRGB(67, 44, 35),
+    vermilion = Color3.fromRGB(145, 45, 37),
+    jade = Color3.fromRGB(74, 126, 103),
+    gold = Color3.fromRGB(218, 177, 95),
+    ivory = Color3.fromRGB(246, 229, 190),
+    muted = Color3.fromRGB(201, 180, 147),
+}
+
+local frame = Instance.new("Frame")
+frame.Name = "Main"
+frame.Size = UDim2.fromOffset(300, 286)
+frame.Position = UDim2.new(0.5, -150, 0.5, -143)
+frame.BackgroundColor3 = C.lacquer
+frame.BorderSizePixel = 0
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = C.gold
+stroke.Thickness = 1.5
+stroke.Parent = frame
+
+local topBar = Instance.new("Frame")
+topBar.Name = "DragBar"
+topBar.Position = UDim2.fromOffset(0, 0)
+topBar.Size = UDim2.new(1, 0, 0, 38)
+topBar.BackgroundColor3 = C.vermilion
+topBar.BorderSizePixel = 0
+topBar.Parent = frame
+Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
+
+local barCover = Instance.new("Frame")
+barCover.Position = UDim2.new(0, 0, 1, -10)
+barCover.Size = UDim2.new(1, 0, 0, 10)
+barCover.BackgroundColor3 = C.vermilion
+barCover.BorderSizePixel = 0
+barCover.Parent = topBar
+
+local mini = Instance.new("TextButton")
+mini.Name = "WatermelonMini"
+mini.Size = UDim2.fromOffset(52, 52)
+mini.Position = UDim2.new(0, 16, 0.5, -26)
+mini.BackgroundColor3 = Color3.fromRGB(48, 105, 63)
+mini.Text = "🍉"
+mini.TextSize = 27
+mini.Font = Enum.Font.GothamBold
+mini.TextColor3 = C.ivory
+mini.Visible = false
+mini.AutoButtonColor = true
+mini.Parent = gui
+mini.ZIndex = 20
+Instance.new("UICorner", mini).CornerRadius = UDim.new(1, 0)
+local miniStroke = Instance.new("UIStroke")
+miniStroke.Color = C.gold
+miniStroke.Thickness = 2
+miniStroke.Parent = mini
+
+local function makeDraggable(object, handle, onClick)
+    local dragging = false
+    local dragInput, startInput, startPosition
+    local moved = false
+    local clickStart
+
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            moved = false
+            clickStart = input.Position
+            startInput = input.Position
+            startPosition = object.Position
+            dragInput = input
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input == dragInput or input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - startInput
+            if math.abs(delta.X) + math.abs(delta.Y) > 6 then
+                moved = true
+                if object == mini then mini:SetAttribute("WasDragged", true) end
+            end
+            object.Position = UDim2.new(
+                startPosition.X.Scale, startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    handle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            if onClick and not moved then onClick() end
+        end
+    end)
+end
+
+makeDraggable(frame, topBar)
+makeDraggable(mini, mini, function()
+    if not mini:GetAttribute("WasDragged") then
+        frame.Visible = true
+        mini.Visible = false
+    end
+    mini:SetAttribute("WasDragged", false)
+end)
+
+local function label(text, pos, size, fontSize, color)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Position = pos
+    l.Size = size
+    l.Font = Enum.Font.GothamSemibold
+    l.TextSize = fontSize
+    l.TextColor3 = color or C.ivory
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Text = text
+    l.Parent = frame
+    return l
+end
+
+label("NHAT KHANH  |  FAKE DISPLAY", UDim2.fromOffset(14, 10), UDim2.new(1, -50, 0, 24), 14, C.gold)
+local subtitle = label("玉 · JADE COURT", UDim2.fromOffset(14, 33), UDim2.new(1, -50, 0, 15), 8, C.ivory)
+subtitle.TextTransparency = 0.12
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(28, 26)
+close.Position = UDim2.new(1, -36, 0, 8)
+close.BackgroundColor3 = C.vermilion
+close.Text = "—"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 13
+close.Parent = frame
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
+close.MouseButton1Click:Connect(function()
+    frame.Visible = false
+    mini.Visible = true
+end)
+
+label("Loại vật thể", UDim2.fromOffset(14, 43), UDim2.fromOffset(100, 20), 12, C.muted)
+
+local kindButton = Instance.new("TextButton")
+kindButton.Position = UDim2.fromOffset(14, 65)
+kindButton.Size = UDim2.fromOffset(132, 32)
+kindButton.BackgroundColor3 = C.inset
+kindButton.TextColor3 = C.ivory
+kindButton.Font = Enum.Font.GothamBold
+kindButton.TextSize = 12
+kindButton.Text = "Egg"
+kindButton.Parent = frame
+Instance.new("UICorner", kindButton).CornerRadius = UDim.new(0, 6)
+
+label("Tên (chỉ Eternal / Divine)", UDim2.fromOffset(14, 105), UDim2.new(1, -28, 0, 20), 11, C.muted)
+
+local prevButton = Instance.new("TextButton")
+prevButton.Position = UDim2.fromOffset(14, 127)
+prevButton.Size = UDim2.fromOffset(38, 32)
+prevButton.BackgroundColor3 = C.inset
+prevButton.TextColor3 = C.ivory
+prevButton.Text = "<"
+prevButton.Font = Enum.Font.GothamBold
+prevButton.TextSize = 14
+prevButton.Parent = frame
+Instance.new("UICorner", prevButton).CornerRadius = UDim.new(0, 6)
+
+local nameButton = Instance.new("TextButton")
+nameButton.Position = UDim2.fromOffset(58, 127)
+nameButton.Size = UDim2.fromOffset(188, 32)
+nameButton.BackgroundColor3 = C.inset
+nameButton.TextColor3 = C.ivory
+nameButton.Text = "Đang tải danh sách..."
+nameButton.Font = Enum.Font.GothamSemibold
+nameButton.TextSize = 11
+nameButton.TextTruncate = Enum.TextTruncate.AtEnd
+nameButton.Parent = frame
+Instance.new("UICorner", nameButton).CornerRadius = UDim.new(0, 6)
+
+local nextButton = Instance.new("TextButton")
+nextButton.Position = UDim2.fromOffset(252, 127)
+nextButton.Size = UDim2.fromOffset(38, 32)
+nextButton.BackgroundColor3 = C.inset
+nextButton.TextColor3 = C.ivory
+nextButton.Text = ">"
+nextButton.Font = Enum.Font.GothamBold
+nextButton.TextSize = 14
+nextButton.Parent = frame
+Instance.new("UICorner", nextButton).CornerRadius = UDim.new(0, 6)
+
+label("Scale game (1x–30x; khác Kg)", UDim2.fromOffset(14, 165), UDim2.new(1, -28, 0, 20), 11, C.muted)
+local scaleBox = Instance.new("TextBox")
+scaleBox.Position = UDim2.fromOffset(14, 187)
+scaleBox.Size = UDim2.fromOffset(132, 32)
+scaleBox.BackgroundColor3 = C.inset
+scaleBox.TextColor3 = C.ivory
+scaleBox.Text = "1"
+scaleBox.ClearTextOnFocus = false
+scaleBox.Font = Enum.Font.Gotham
+scaleBox.TextSize = 12
+scaleBox.Parent = frame
+Instance.new("UICorner", scaleBox).CornerRadius = UDim.new(0, 6)
+
+local spawn = Instance.new("TextButton")
+spawn.Position = UDim2.fromOffset(14, 229)
+spawn.Size = UDim2.fromOffset(132, 32)
+spawn.BackgroundColor3 = C.jade
+spawn.TextColor3 = Color3.new(1,1,1)
+spawn.Text = "HIỂN THỊ GIẢ"
+spawn.Font = Enum.Font.GothamBold
+spawn.TextSize = 12
+spawn.Parent = frame
+Instance.new("UICorner", spawn).CornerRadius = UDim.new(0, 6)
+
+local clear = Instance.new("TextButton")
+clear.Position = UDim2.fromOffset(154, 229)
+clear.Size = UDim2.fromOffset(132, 32)
+clear.BackgroundColor3 = C.vermilion
+clear.TextColor3 = Color3.new(1,1,1)
+clear.Text = "XÓA HIỂN THỊ"
+clear.Font = Enum.Font.GothamBold
+clear.TextSize = 12
+clear.Parent = frame
+Instance.new("UICorner", clear).CornerRadius = UDim.new(0, 6)
+
+local status = label("Chỉ tạo mô hình cục bộ; không thêm vào túi đồ.", UDim2.fromOffset(14, 267), UDim2.new(1, -28, 0, 24), 10, C.muted)
+status.TextWrapped = true
+
+local kind = "Egg"
+local selectedIndex = { Egg = 1, Pet = 1 }
+
+local function updateNameButton()
+    local names = refreshNames(kind)
+    if #names == 0 then
+        selectedIndex[kind] = 1
+        nameButton.Text = "Không có model Eternal/Divine"
+    else
+        selectedIndex[kind] = math.clamp(selectedIndex[kind] or 1, 1, #names)
+        nameButton.Text = names[selectedIndex[kind]]
+    end
+end
+
+local function moveSelection(delta)
+    local names = refreshNames(kind)
+    if #names == 0 then
+        updateNameButton()
+        return
+    end
+    selectedIndex[kind] = ((selectedIndex[kind] - 1 + delta) % #names) + 1
+    updateNameButton()
+end
+
+prevButton.MouseButton1Click:Connect(function() moveSelection(-1) end)
+nextButton.MouseButton1Click:Connect(function() moveSelection(1) end)
+
+kindButton.MouseButton1Click:Connect(function()
+    kind = kind == "Egg" and "Pet" or "Egg"
+    kindButton.Text = kind
+    updateNameButton()
+end)
+
+updateNameButton()
+
+local function anchorModel(model)
+    for _, obj in ipairs(model:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.Anchored = true
+            obj.CanCollide = false
+            obj.CanTouch = false
+            obj.CanQuery = false
+        end
+    end
+end
+
+local function addBillboard(model, displayName, kg, money)
+    local part = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+    if not part then return end
+    model.PrimaryPart = part
+    local bill = Instance.new("BillboardGui")
+    bill.Name = "FakeStats"
+    bill.Size = UDim2.fromOffset(220, 58)
+    bill.StudsOffset = Vector3.new(0, 3, 0)
+    bill.AlwaysOnTop = true
+    bill.Adornee = part
+    bill.Parent = part
+
+    local text = Instance.new("TextLabel")
+    text.BackgroundColor3 = C.panel
+    text.BackgroundTransparency = 0.15
+    text.Size = UDim2.fromScale(1, 1)
+    text.Font = Enum.Font.GothamBold
+    text.TextSize = 12
+    text.TextColor3 = C.ivory
+    text.TextWrapped = true
+    local kgText = kg and (string.format("%.2f Kg", kg)) or "Kg: N/A"
+    local moneyText = money and (formatNumber(money) .. "/s") or "Tiền/s: N/A"
+    text.Text = displayName .. "\n" .. kgText .. "  |  " .. moneyText .. "\nFAKE / LOCAL ONLY"
+    text.Parent = bill
+    Instance.new("UICorner", text).CornerRadius = UDim.new(0, 6)
+end
+
+spawn.MouseButton1Click:Connect(function()
+    local names = refreshNames(kind)
+    local name = names[selectedIndex[kind]]
+    local scale = tonumber(scaleBox.Text)
+    if not name then
+        status.Text = "Không tìm thấy model Eternal/Divine cho loại này."
+        return
+    end
+    if not scale or scale < 1 or scale > 30 then
+        status.Text = "Scale phải nằm trong khoảng 1x–30x." 
+        return
+    end
+
+    local sourceModel = getModel(kind, name)
+    if not sourceModel or not sourceModel:IsA("Model") then
+        status.Text = "Không tìm thấy model. Kiểm tra tên và loại Egg/Pet."
+        return
+    end
+
+    local ok, model = pcall(function() return sourceModel:Clone() end)
+    if not ok or not model then
+        status.Text = "Không thể clone model này."
+        return
+    end
+
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then
+        model:Destroy()
+        status.Text = "Không tìm thấy nhân vật."
+        return
+    end
+
+    anchorModel(model)
+    model.Name = "FAKE_" .. name
+    model.Parent = visualFolder
+    local target = root.CFrame * CFrame.new(0, 0, -7)
+    pcall(function()
+        if model.ScaleTo then model:ScaleTo(math.clamp(1 + scale / 70, 1, 2.4)) end
+        model:PivotTo(target)
+    end)
+
+    local kg, money = calculate(kind, name, scale)
+    addBillboard(model, name, kg, money)
+    status.Text = string.format("Đã tạo hiển thị giả. Scale %.3f | Kg %s | Tiền/s %s",
+        scale, kg and string.format("%.2f", kg) or "N/A", money and formatNumber(money) or "N/A")
+end)
+
+clear.MouseButton1Click:Connect(function()
+    for _, obj in ipairs(visualFolder:GetChildren()) do obj:Destroy() end
+    status.Text = "Đã xóa tất cả mô hình hiển thị giả."
+end)
